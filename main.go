@@ -20,6 +20,7 @@ import (
 var (
 	startTime  = time.Now()
 	logger     = log.New(os.Stdout, "[gin] ", 0)
+	immediate  = false
 	buildError error
 )
 
@@ -49,6 +50,14 @@ func main() {
 			Value: ".",
 			Usage: "Path to watch files from",
 		},
+		cli.BoolFlag{
+			Name:  "immediate,i",
+			Usage: "run the server immediately after it's built",
+		},
+		cli.BoolFlag{
+			Name:  "godep,g",
+			Usage: "use godep when building",
+		},
 	}
 	app.Commands = []cli.Command{
 		{
@@ -71,6 +80,7 @@ func main() {
 func MainAction(c *cli.Context) {
 	port := c.GlobalInt("port")
 	appPort := strconv.Itoa(c.GlobalInt("appPort"))
+	immediate = c.GlobalBool("immediate")
 
 	// Bootstrap the environment
 	envy.Bootstrap()
@@ -83,7 +93,7 @@ func MainAction(c *cli.Context) {
 		logger.Fatal(err)
 	}
 
-	builder := gin.NewBuilder(c.GlobalString("path"), c.GlobalString("bin"))
+	builder := gin.NewBuilder(c.GlobalString("path"), c.GlobalString("bin"), c.GlobalBool("godep"))
 	runner := gin.NewRunner(filepath.Join(wd, builder.Binary()), c.Args()...)
 	runner.SetWriter(os.Stdout)
 	proxy := gin.NewProxy(builder, runner)
@@ -103,12 +113,12 @@ func MainAction(c *cli.Context) {
 	shutdown(runner)
 
 	// build right now
-	build(builder, logger)
+	build(builder, runner, logger)
 
 	// scan for changes
 	scanChanges(c.GlobalString("path"), func(path string) {
 		runner.Kill()
-		build(builder, logger)
+		build(builder, runner, logger)
 	})
 }
 
@@ -125,7 +135,7 @@ func EnvAction(c *cli.Context) {
 
 }
 
-func build(builder gin.Builder, logger *log.Logger) {
+func build(builder gin.Builder, runner gin.Runner, logger *log.Logger) {
 	err := builder.Build()
 	if err != nil {
 		buildError = err
@@ -137,6 +147,9 @@ func build(builder gin.Builder, logger *log.Logger) {
 			logger.Println("Build Successful")
 		}
 		buildError = nil
+		if immediate {
+			runner.Run()
+		}
 	}
 
 	time.Sleep(100 * time.Millisecond)
