@@ -28,6 +28,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "gin"
 	app.Usage = "A live reload utility for Go web applications."
+	app.Version = "0.0.1"
 	app.Action = MainAction
 	app.Flags = []cli.Flag{
 		cli.IntFlag{
